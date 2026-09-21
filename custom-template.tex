@@ -1,0 +1,106 @@
+% !TeX program = xelatex
+\documentclass[a4paper, 12pt]{article}
+
+% --- Page Layout & Headers ---
+\usepackage[a4paper, margin=2.5cm]{geometry}
+\usepackage{fancyhdr}
+\setlength{\headheight}{14.5pt}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{Notes}
+\rhead{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Math Packages ---
+\usepackage{amsmath}
+\usepackage{amssymb} 
+
+% --- Typography & Spacing ---
+\usepackage{fontspec} 
+\usepackage{unicode-math} 
+\usepackage{textcomp} 
+\usepackage{parskip} 
+\usepackage{microtype} 
+\usepackage{etoolbox}
+\usepackage[english]{babel}
+\defaultfontfeatures{Ligatures=TeX}
+\setmainfont{Latin Modern Roman}
+\setsansfont{Arial}
+
+% --- Graphics, TikZ & Floats ---
+\usepackage{graphicx} 
+\usepackage{float}
+\usepackage[section]{placeins} 
+\usepackage[font=small, labelfont=bf]{caption} 
+
+\usepackage{pgf}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=newest}
+\usetikzlibrary{
+    calc, patterns, decorations.pathmorphing, decorations.markings,
+    arrows.meta, shapes.geometric, positioning, intersections, angles, quotes, math
+}
+
+% --- Links ---
+\usepackage[colorlinks=true, citecolor=blue, urlcolor=blue, linkcolor=blue]{hyperref}
+\usepackage{bookmark} % Silences the rerun warning and handles outlines faster
+
+% --- Document Info ---
+\title{Reference Notes}
+\author{Made By Abhik Biswas}
+\date{}
+
+% --- Figure Referencing Switch ---
+\newtoggle{afterfigure}
+\togglefalse{afterfigure}
+\AtEndEnvironment{figure}{\global\toggletrue{afterfigure}}
+\renewcommand{\cite}[1]{%
+  \ifstrempty{#1}{% 
+    \iftoggle{afterfigure}{\textbf{Figure \thefigure:} \global\togglefalse{afterfigure}}{\mbox{}}%
+  }{[#1]}%
+}
+
+% --- Pandoc Compatibility ---
+\usepackage{calc}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{environ}
+
+\def\tightlist{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\providecommand{\phantomsection}{}
+\providecommand{\pandocbounded}[1]{#1}
+
+\RenewEnviron{longtable}{}
+$highlighting-macros$
+
+% Smart Kill-Switch: Ignore web images and SVGs, but keep a backdoor for Python
+\let\realincludegraphics\includegraphics
+\renewcommand{\includegraphics}[2][]{}
+\providecommand{\includesvg}[2][]{}
+\renewcommand{\includesvg}[2][]{}
+\begin{document}
+
+
+% --- Safety Net ---
+\let\realenddocument\enddocument
+\makeatletter
+\def\documentclass{\@ifnextchar[\@skipoptarg@cls\@skipnooptarg@cls}
+\def\@skipoptarg@cls[#1]#2{}
+\def\@skipnooptarg@cls#1{}
+\def\usepackage{\@ifnextchar[\@skipoptarg@pkg\@skipnooptarg@pkg}
+\def\@skipoptarg@pkg[#1]#2{}
+\def\@skipnooptarg@pkg#1{}
+\def\document{}
+\def\enddocument{}
+\makeatother
+
+\maketitle
+\thispagestyle{fancy} 
+\hrule \vspace{1.5em} 
+
+$body$
+
+\let\enddocument\realenddocument
+\end{document}
