@@ -28,7 +28,7 @@ REM =========================================================
 if "%INPUT%"=="" (
     echo ERROR: No input file was supplied.
     echo.
-    echo Drag an .htm, .html, .md, or .txt file onto compile.bat.
+    echo Drag an .htm, .html, .md, .txt, .csv, .docx, etc. onto compile.bat.
     echo.
     pause
     exit /b 1
@@ -55,42 +55,22 @@ if /I "%EXTENSION%"==".htm" goto TYPE_HTML
 if /I "%EXTENSION%"==".html" goto TYPE_HTML
 if /I "%EXTENSION%"==".md" goto TYPE_MARKDOWN
 if /I "%EXTENSION%"==".txt" goto TYPE_TEXT
+if /I "%EXTENSION%"==".csv" goto TYPE_CSV
+if /I "%EXTENSION%"==".docx" goto TYPE_DOCX
+if /I "%EXTENSION%"==".doc" goto TYPE_DOCX
 
-echo ==========================================
-echo              INVALID FILE TYPE
-echo ==========================================
-echo.
-echo ERROR: Unsupported file type:
-echo "%EXTENSION%"
-echo.
-echo Supported file types are:
-echo.
-echo   .htm
-echo   .html
-echo   .md
-echo   .txt
-echo.
-echo No files were created.
-echo.
-pause
-exit /b 1
-
+REM If it doesn't match the above, send it to auto-detect (everything else)
+goto TYPE_AUTO
 
 REM =========================================================
-REM HTML / HTM
+REM FORMAT DEFINITIONS
 REM =========================================================
 
 :TYPE_HTML
 set "INPUT_FORMAT=html+tex_math_dollars+tex_math_single_backslash-native_divs-native_spans"
 set "USE_FILTER=YES"
 set "TYPE_NAME=HTML/HTM"
-
 goto CHECK_FILES
-
-
-REM =========================================================
-REM MARKDOWN & TEXT
-REM =========================================================
 
 :TYPE_MARKDOWN
 set "INPUT_FORMAT=markdown+tex_math_single_backslash"
@@ -102,6 +82,24 @@ goto CHECK_FILES
 set "INPUT_FORMAT=markdown+tex_math_single_backslash"
 set "USE_FILTER=YES"
 set "TYPE_NAME=Text"
+goto CHECK_FILES
+
+:TYPE_CSV
+set "INPUT_FORMAT=csv"
+set "USE_FILTER=YES"
+set "TYPE_NAME=CSV Spreadsheet"
+goto CHECK_FILES
+
+:TYPE_DOCX
+set "INPUT_FORMAT=docx"
+set "USE_FILTER=YES"
+set "TYPE_NAME=Word Document"
+goto CHECK_FILES
+
+:TYPE_AUTO
+set "INPUT_FORMAT="
+set "USE_FILTER=YES"
+set "TYPE_NAME=Auto-Detected (%EXTENSION%)"
 goto CHECK_FILES
 
 
@@ -158,13 +156,16 @@ echo              CREATING TEX
 echo ==========================================
 echo.
 
-if "%USE_FILTER%"=="YES" (
-    echo Generating standalone TeX file with filter...
-    pandoc "%INPUT%" -f "%INPUT_FORMAT%" --lua-filter="%FILTER%" --wrap=none --template="%TEMPLATE%" -o "%TEX_OUTPUT%"
-) else (
-    echo Generating standalone TeX file...
-    pandoc "%INPUT%" -f "%INPUT_FORMAT%" --wrap=none --template="%TEMPLATE%" -o "%TEX_OUTPUT%"
-)
+REM Dynamically build the Pandoc command so we can omit the format flag for auto-detect
+set "PANDOC_CMD=pandoc "%INPUT%""
+
+if not "%INPUT_FORMAT%"=="" set "PANDOC_CMD=%PANDOC_CMD% -f "%INPUT_FORMAT%""
+if "%USE_FILTER%"=="YES" set "PANDOC_CMD=%PANDOC_CMD% --lua-filter="%FILTER%""
+set "PANDOC_CMD=%PANDOC_CMD% --wrap=none --template="%TEMPLATE%" -o "%TEX_OUTPUT%""
+
+echo Executing: %PANDOC_CMD%
+echo.
+%PANDOC_CMD%
 
 if errorlevel 1 (
     echo.
@@ -221,7 +222,6 @@ echo ==========================================
 echo.
 
 if not exist "%BIN_DIR%" mkdir "%BIN_DIR%"
-
 
 REM Move LaTeX build garbage from previous compilations
 move "*.aux" "%BIN_DIR%\" >nul 2>&1
