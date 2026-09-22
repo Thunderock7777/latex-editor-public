@@ -32,20 +32,35 @@
 \usepackage{float}
 \usepackage[section]{placeins} 
 \usepackage[font=small, labelfont=bf]{caption} 
+\usepackage{soul}
 
 \usepackage{pgf}
 \usepackage{tikz}
 \usepackage{pgfplots}
-\pgfplotsset{compat=newest}
+\pgfplotsset{compat=1.18} % <--- Locked version to silence compilation warnings
 \usetikzlibrary{
     calc, patterns, decorations.pathmorphing, decorations.markings,
     arrows.meta, shapes.geometric, positioning, intersections, angles, quotes, math
 }
 
-% --- Links ---
+% --- Pandoc Compatibility (Moved UP) ---
+\usepackage{calc}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{environ}
+\newcounter{none}  % <--- Fixes the Pandoc table crash
+
+\def\tightlist{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\providecommand{\phantomsection}{}
+\providecommand{\pandocbounded}[1]{#1}
+
+%\RenewEnviron{longtable}{}
+$highlighting-macros$
+
+% --- Links (Moved DOWN to prevent package clashes) ---
 \usepackage[colorlinks=true, citecolor=blue, urlcolor=blue, linkcolor=blue]{hyperref}
 \usepackage{bookmark} % Silences the rerun warning and handles outlines faster
-\usepackage{soul}
 
 % --- Document Info ---
 \title{Reference Notes}
@@ -61,20 +76,6 @@
     \iftoggle{afterfigure}{\textbf{Figure \thefigure:} \global\togglefalse{afterfigure}}{\mbox{}}%
   }{[#1]}%
 }
-
-% --- Pandoc Compatibility ---
-\usepackage{calc}
-\usepackage{array}
-\usepackage{booktabs}
-\usepackage{longtable}
-\usepackage{environ}
-
-\def\tightlist{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
-\providecommand{\phantomsection}{}
-\providecommand{\pandocbounded}[1]{#1}
-
-\RenewEnviron{longtable}{}
-$highlighting-macros$
 
 % Smart Kill-Switch: Ignore web images and SVGs, but keep a backdoor for Python
 \let\realincludegraphics\includegraphics

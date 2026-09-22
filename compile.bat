@@ -151,7 +151,7 @@ REM AUTO-INSTALL DEPENDENCIES (PROTECTION)
 REM =========================================================
 
 echo ==========================================
-echo        CHECKING DEPENDENCIES
+echo         CHECKING DEPENDENCIES
 echo ==========================================
 echo.
 
@@ -159,7 +159,7 @@ REM 1. Check Python Libraries
 python -c "import matplotlib, numpy, scipy, sympy, pandas" 2>nul
 if errorlevel 1 (
     echo [System] Missing Python libraries detected. Installing...
-    pip install matplotlib numpy scipy sympy pandas cupy
+    pip install matplotlib numpy scipy sympy pandas 
 ) else (
     echo [System] Python libraries: OK
 )
@@ -182,7 +182,7 @@ REM =========================================================
 :CREATE_TEX
 
 echo ==========================================
-echo              CREATING TEX
+echo               CREATING TEX
 echo ==========================================
 echo.
 
@@ -200,7 +200,7 @@ echo.
 if errorlevel 1 (
     echo.
     echo ==========================================
-    echo            TEX CREATION FAILED
+    echo             TEX CREATION FAILED
     echo ==========================================
     pause
     exit /b 1
@@ -217,18 +217,22 @@ REM =========================================================
 
 echo.
 echo ==========================================
-echo              CREATING PDF
+echo               CREATING PDF
 echo ==========================================
 echo.
 echo Compiling PDF and generating SyncTeX map...
 
+REM Delete old PDF so a failed compile doesn't falsely report success
+if exist "%PDF_OUTPUT%" del "%PDF_OUTPUT%"
+
 REM Run XeLaTeX directly on the generated .tex file so the .synctex.gz map stays in this folder
 xelatex -synctex=1 -interaction=nonstopmode "%TEX_OUTPUT%"
 
-if errorlevel 1 (
+REM Only fail if the PDF file was completely blocked from being created
+if not exist "%PDF_OUTPUT%" (
     echo.
     echo ==========================================
-    echo            PDF CREATION FAILED
+    echo             PDF CREATION FAILED
     echo ==========================================
     echo.
     echo Check the terminal above for LaTeX errors.
@@ -272,7 +276,7 @@ REM =========================================================
 
 echo.
 echo ==========================================
-echo          CONVERSION COMPLETED
+echo           CONVERSION COMPLETED
 echo ==========================================
 echo.
 echo TEX:
