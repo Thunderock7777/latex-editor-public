@@ -77,7 +77,9 @@ function CodeBlock(el)
         local print_output = handle:read("*a")
         handle:close()
 
-        local output_blocks = {}
+        -- SAFETY FIX 1: Keep the original Python code block so it isn't deleted from your .txt file!
+        local output_blocks = { el }
+        
         if print_output and print_output:match("%S") then
             print_output = print_output:gsub("%s+$", "") 
             table.insert(output_blocks, pandoc.CodeBlock(print_output))
@@ -92,16 +94,23 @@ function CodeBlock(el)
     return el
 end
 
--- 3. Overwrite the input file with the perfectly clean AST
+-- 3. Output the perfectly clean Text file (SAFELY)
 function Pandoc(doc)
     local clean_text = pandoc.write(doc, "markdown")
     
-    -- Dynamically grab the input file name (e.g., "test.txt" or "notes.md")
+    -- Dynamically grab the input file name
     local input_filename = PANDOC_STATE.input_files[1] 
     
     -- Fallback just in case Pandoc is fed from standard input rather than a file
     if not input_filename then 
         input_filename = "cleaned_notes.txt" 
+    end
+    
+    -- SAFETY FIX 2: Only allow self-cleaning on .txt and .md files. Protect CSV and DOCX!
+    local ext = input_filename:match("^.+(%..+)$")
+    if ext ~= ".txt" and ext ~= ".md" then
+        print("SUCCESS: PDF generated! (Skipped self-cleaning to protect " .. tostring(ext) .. " file).")
+        return doc
     end
     
     local file, err = io.open(input_filename, "w")
