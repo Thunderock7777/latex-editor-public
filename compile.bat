@@ -1,4 +1,5 @@
 @echo off
+color 0A
 setlocal EnableExtensions
 
 echo.
@@ -143,6 +144,35 @@ if "%USE_FILTER%"=="YES" (
         exit /b 1
     )
 )
+
+
+REM =========================================================
+REM AUTO-INSTALL DEPENDENCIES (PROTECTION)
+REM =========================================================
+
+echo ==========================================
+echo        CHECKING DEPENDENCIES
+echo ==========================================
+echo.
+
+REM 1. Check Python Libraries
+python -c "import matplotlib, numpy, scipy, sympy, pandas" 2>nul
+if errorlevel 1 (
+    echo [System] Missing Python libraries detected. Installing...
+    pip install matplotlib numpy scipy sympy pandas cupy
+) else (
+    echo [System] Python libraries: OK
+)
+
+REM 2. Check LaTeX Packages (using pgfplots as the indicator)
+kpsewhich pgfplots.sty >nul 2>&1
+if errorlevel 1 (
+    echo [System] Missing LaTeX packages detected. Installing...
+    tlmgr install pgfplots bookmark environ placeins microtype unicode-math
+) else (
+    echo [System] LaTeX packages: OK
+)
+echo.
 
 
 REM =========================================================
