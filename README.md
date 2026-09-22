@@ -1,43 +1,59 @@
 ```markdown
 # Auto-LaTeX Document Engine
 
-A fully automated pipeline that converts standard text, Markdown, and HTML notes into beautifully typeset PDFs. Built for computational physics and academic workflows, this engine features a native Python execution environment for inline numerical simulations, alongside a universal Lua firewall that scrubs crashing web elements while perfectly preserving local images.
+A fully automated pipeline that converts standard text, Markdown, CSV, DOCX, and unstructured web HTML into beautifully typeset PDFs. Built primarily for frictionless AI workflows, computational physics, and academic research, this engine allows you to copy-paste messy AI responses, unstructured math equations, and Python code directly into a `.txt` file. The engine instantly cleans the input, executes the code, and generates a perfect PDF.
 
-## ✨ Features
-* **Multi-Format Compilation:** Instantly compile `.md`, `.txt`, `.htm`, and `.html` files into `.tex` and `.pdf` documents with a single command or drag-and-drop.
+## 🌟 Salient Features
+
+* **Frictionless AI & Web Math Extraction:** Copy complex math derivations directly from Wikipedia, physics blogs, or AI chatbots (like ChatGPT/Gemini). The engine natively unspools MathJax, KaTeX, and MediaWiki HTML, converting them into perfectly structured LaTeX equations.
+* **Self-Cleaning `.txt` Notes:** When you paste ugly, unstructured HTML into a `.txt` or `.md` file, the pipeline doesn't just compile it—it permanently cleans it. Upon execution, the engine dynamically deletes the messy web code in your input file and overwrites it with pristine, raw LaTeX and Markdown.
+* **Universal Document Routing:** Drag and drop `.csv` files to instantly generate beautifully formatted LaTeX tables, or drop a `.docx` Word document for immediate PDF conversion. Unrecognized formats are automatically detected and routed.
 * **Native Python Execution:** Write Python code directly in your notes. The engine runs it in the background, captures your printed console output, and automatically injects Matplotlib graphs as high-quality PDFs.
-* **Universal Web Firewall:** Save webpages as HTML or copy massive text blocks from the web. The Lua script silently vaporizes broken HTML tags, SVGs, and raw URLs before they can crash the LaTeX compiler.
-* **Smart Cleanup:** Automatically sweeps intermediate build files (`.aux`, `.log`, `.out`) into a dedicated `bin/` directory, keeping your workspace completely clean.
+* **Universal Web Firewall:** The Lua script silently vaporizes broken HTML tags, SVGs, and raw URLs before they can crash the LaTeX compiler, ensuring complete stability.
 
 ---
 
-## 🛠️ Step 1: System Requirements & Installation
+## 🔖 The "Copy HTML" Bookmarklet (Required Setup)
+
+To extract math equations and AI responses without triggering compiler crashes from hidden web elements, you must use this surgical extraction bookmarklet.
+
+1. Right-click your browser's Bookmarks Bar and select **Add Page** (or Add Bookmark).
+2. Name it **Copy HTML**.
+3. Paste this exact code into the **URL** box and save:
+
+```javascript
+javascript:(function(){var sel=window.getSelection();if(sel.rangeCount>0){var div=document.createElement('div');div.appendChild(sel.getRangeAt(0).cloneContents());navigator.clipboard.writeText(div.innerHTML).then(function(){alert('HTML Copied!');}).catch(function(){alert('Error copying HTML');});}else{alert('Select some text first!');}})();
+
+```
+
+**How to use it:** Highlight any AI response, Wikipedia equation, or web text. Instead of pressing `Ctrl+C`, click the **Copy HTML** bookmarklet.
+
+---
+
+## 🛠️ System Requirements & Installation
 
 To run this pipeline locally, you must install three core dependencies and ensure they are added to your system's `PATH`.
 
 ### A. LaTeX (TeX Live)
-You need a LaTeX distribution that includes the **XeLaTeX** compiler and standard typesetting packages.
-1. Download and install [TeX Live](https://tug.org/texlive/) (Recommended) or [MiKTeX](https://miktex.org/).
-2. Ensure the installation path is added to your system's `PATH`.
-3. Open your terminal or Command Prompt and install the specific packages required by the template:
-   ```bash
-   tlmgr install pgfplots bookmark environ placeins microtype unicode-math
+
+1. Download and install [TeX Live](https://tug.org/texlive/?utm_source=gemini) (Recommended) or [MiKTeX](https://miktex.org/?utm_source=gemini).
+2. Open your terminal or Command Prompt and install the specific packages required by the template:
+```bash
+tlmgr install pgfplots bookmark environ placeins microtype unicode-math
 
 ```
 
-### B. Pandoc
 
-Pandoc acts as the conversion bridge between your raw text/HTML and the LaTeX compiler.
+
+### B. Pandoc
 
 1. Download the latest installer from the [Pandoc GitHub Releases page](https://github.com/jgm/pandoc/releases?utm_source=gemini).
 2. Run the installer and verify that the option to add Pandoc to your system `PATH` is checked.
 
 ### C. Python & Scientific Libraries
 
-The pipeline executes embedded Python code to run simulations, print results, and generate plots natively.
-
 1. Install [Python 3.x](https://www.python.org/downloads/?utm_source=gemini) and add it to your system `PATH`.
-2. Open your terminal and install Matplotlib along with any computational libraries you use:
+2. Open your terminal and install Matplotlib along with your computational libraries:
 ```bash
 pip install matplotlib numpy scipy sympy pandas cupy
 
@@ -47,65 +63,63 @@ pip install matplotlib numpy scipy sympy pandas cupy
 
 ---
 
-## 📂 Step 2: Repository Setup
+## 🚀 Usage Guide
 
-Clone this repository or download the core files into a dedicated directory for your notes. The pipeline relies on three main files:
+### 1. Extracting AI Responses & Web Math (The `htmlcode` Block)
 
-1. **`compile.bat`**: The execution script. It manages the pipeline, invokes Pandoc and XeLaTeX, and sweeps the garbage files.
-2. **`custom-template.tex`**: The LaTeX skeleton. It formats the typography, loads required packages (including TikZ/pgfplots), and establishes a smart kill-switch to block unstable web SVGs.
-3. **`fix-groups.lua`**: The Pandoc Lua engine. It acts as an absolute firewall that extracts your Python code, captures terminal printouts, generates PDF plots, and safely injects local images via a custom LaTeX backdoor.
+To perfectly capture unstructured math from the web or AI chats:
 
----
+1. Highlight the text/math on the website and click your **Copy HTML** bookmarklet.
+2. Open your `.txt` or `.md` notes file and paste the clipboard contents inside an `htmlcode` block:
 
-## 🚀 Step 3: Usage Guide
+```markdown
+```htmlcode
+<span class="mwe-math-element">...pasted messy html...</span>
+```
 
-### 1. Compiling a Document
+```
 
-You can write your notes in a standard `.txt` or `.md` file, or save an entire webpage as an `.html` / `.htm` file in the same directory as the script. There are two ways to compile:
+3. Run the compiler. The Lua engine will safely extract the pure LaTeX, generate the PDF, and **automatically rewrite your `.txt` file** so the ugly HTML block is permanently replaced by clean text.
+
+### 2. Compiling the Document
 
 **Method A: Command Line (Recommended)**
 Open your terminal in the directory and run the batch script followed by your filename:
 
 ```cmd
-.\compile.bat filename.extension
+.\compile.bat filename.txt
 
 ```
 
 **Method B: Drag and Drop**
-Simply drag and drop your `.md`, `.txt`, or `.html` file directly onto `compile.bat` in Windows File Explorer.
+Simply drag and drop your `.md`, `.txt`, `.csv`, or `.docx` file directly onto `compile.bat` in Windows File Explorer. The engine natively formats CSV data into LaTeX tables automatically.
 
-The generated PDF will appear instantly in the same folder.
+### 3. Generating Python Plots & Printing Results
 
-### 2. Generating Python Plots & Printing Results
+To run a computational script, wrap your code in a `python-run` block.
 
-To run a computational script, wrap your code in a `python-run` block. The Lua engine will execute it automatically.
+* **Printed Results:** Anything you `print()` in the script is automatically captured and formatted as a clean code block.
+* **Plots:** Matplotlib graphs are automatically saved and injected directly below the printed output (no `plt.savefig()` needed).
 
-* **Printed Results:** Anything you `print()` in the script (like data arrays, variables, or text strings) is automatically captured and formatted as a clean code block in the final PDF.
-* **Plots:** Matplotlib graphs are automatically saved and injected directly below the printed output. *Note: Do not include `plt.savefig()` manually; the engine handles it.*
-
-```python
-~~~python-run
+```markdown
+```python-run
 import numpy as np
+import matplotlib.pyplot as plt
 
-# Simulate a 1D state-space model or wave function
 x = np.linspace(0, 10, 5)
 y = np.sin(x)
 
-# This array will be printed into the PDF
 print("Calculated Sine Values:")
 print(np.round(y, 3))
 
-# This plot will be injected below the text
 plt.plot(x, y)
-~~~
+```
 
 ```
 
-### 3. Inserting Local Images
+### 4. Inserting Local Images
 
-Because the Lua engine aggressively scrubs standard Markdown images (`![alt](url)`) to prevent compiler crashes from pasted web-clutter, you must insert local screenshots or diagrams using the raw LaTeX backdoor.
-
-Place your image file in the same folder as your notes and paste this exact block:
+Because the Lua engine aggressively scrubs standard Markdown images (`![alt](url)`) to prevent compiler crashes from pasted web clutter, you must insert local screenshots or diagrams using the raw LaTeX backdoor.
 
 ```latex
 \begin{figure}[H]
@@ -120,10 +134,10 @@ Place your image file in the same folder as your notes and paste this exact bloc
 
 ## 📝 License & Author
 
-Created by Abhik Biswas. Feel free to fork, modify, and adapt this pipeline for your own typesetting and computational workflows.
+Created by Abhik Biswas with the help of Gemini. Feel free to fork, modify, and adapt this pipeline for your own AI workflows, typesetting, and computational projects.
 
 ```
 
-<FollowUp label="Repository Launch" query="Are you ready to initialize your local Git repository and push this to GitHub?"/>
+<FollowUp label="Review README structure" query="Does this updated README perfectly capture the primary AI/math copy-paste workflow you envisioned, or is there any specific wording you'd like adjusted?"/>
 
 ```
