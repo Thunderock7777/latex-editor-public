@@ -73,20 +73,50 @@ function CodeBlock(el)
         file:write("plt.savefig('" .. pdf_file .. "', format='pdf', bbox_inches='tight')\n")
         file:close()
 
-        local handle = io.popen("python " .. py_file)
+        -- Execute Python and capture BOTH standard output and crash tracebacks (2>&1)
+        local handle = io.popen("python " .. py_file .. " 2>&1")
         local print_output = handle:read("*a")
         handle:close()
 
-        -- SAFETY FIX 1: Keep the original Python code block so it isn't deleted from your .txt file!
+        -- AUTO-INSTALLER: Check if it crashed because of a missing module
+        for i = 1, 2 do -- Try max 2 times to prevent infinite loops
+            local missing_module = print_output:match("ModuleNotFoundError: No module named '([^']+)'")
+            if missing_module then
+                print("\n[Auto-Installer] Missing module detected: " .. missing_module)
+                print("[Auto-Installer] Attempting to download and install via pip...\n")
+                
+                -- Run pip install automatically
+                os.execute("pip install " .. missing_module)
+                
+                -- Retry the Python script after installation
+                handle = io.popen("python " .. py_file .. " 2>&1")
+                print_output = handle:read("*a")
+                handle:close()
+            else
+                break -- No missing modules, exit the retry loop
+            end
+        end
+
+        -- SAFETY FIX 1: Keep the original Python code block
         local output_blocks = { el }
         
+        -- Print whatever Python spit out (Results OR the Crash Traceback)
         if print_output and print_output:match("%S") then
             print_output = print_output:gsub("%s+$", "") 
             table.insert(output_blocks, pandoc.CodeBlock(print_output))
         end
 
-        local tex_injection = '\n\\begin{figure}[H]\n\\centering\n\\realincludegraphics[width=0.85\\textwidth]{' .. pdf_file .. '}\n\\end{figure}\n'
-        table.insert(output_blocks, pandoc.RawBlock('tex', tex_injection))
+        -- Check if the PDF graph was successfully created
+        local check_pdf = io.open(pdf_file, "r")
+        if check_pdf then
+            check_pdf:close()
+            local tex_injection = '\n\\begin{figure}[H]\n\\centering\n\\realincludegraphics[width=0.85\\textwidth]{' .. pdf_file .. '}\n\\end{figure}\n'
+            table.insert(output_blocks, pandoc.RawBlock('tex', tex_injection))
+        else
+            -- If it failed, inject a warning instead of a broken image to protect the LaTeX compiler
+            local error_msg = '\n\\textbf{\\color{red}Warning: Graph could not be generated. See Python traceback above.}\n'
+            table.insert(output_blocks, pandoc.RawBlock('tex', error_msg))
+        end
 
         return output_blocks
     end
