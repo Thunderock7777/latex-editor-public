@@ -26,17 +26,12 @@ function CodeBlock(el)
         
         local math_cleaner = {
             Span = function(span)
-                if span.classes:includes("mwe-math-mathml-inline") or span.classes:includes("mwe-math-mathml-a11y") then
-                    return {}
-                end
+                if span.classes:includes("mwe-math-mathml-inline") or span.classes:includes("mwe-math-mathml-a11y") then return {} end
                 if span.classes:includes("mwe-math-element") then
                     local tex = nil
                     for _, inline in ipairs(span.content) do
-                        if inline.t == "Image" then
-                            tex = pandoc.utils.stringify(inline.caption)
-                        elseif inline.t == "Math" and not tex then
-                            tex = inline.text
-                        end
+                        if inline.t == "Image" then tex = pandoc.utils.stringify(inline.caption)
+                        elseif inline.t == "Math" and not tex then tex = inline.text end
                     end
                     if tex then
                         tex = tex:gsub("^%s*\\%(", ""):gsub("\\%)%s*$", "")
@@ -56,9 +51,7 @@ function CodeBlock(el)
                 return raw
             end
         }
-        
-        local cleaned_blocks = pandoc.walk_block(pandoc.Div(doc.blocks), math_cleaner).content
-        return cleaned_blocks
+        return pandoc.walk_block(pandoc.Div(doc.blocks), math_cleaner).content
     end
 
     -- Python execution and plot generation
@@ -73,50 +66,42 @@ function CodeBlock(el)
         file:write("plt.savefig('" .. pdf_file .. "', format='pdf', bbox_inches='tight')\n")
         file:close()
 
-        -- Execute Python and capture BOTH standard output and crash tracebacks (2>&1)
         local handle = io.popen("python " .. py_file .. " 2>&1")
         local print_output = handle:read("*a")
         handle:close()
 
-        -- AUTO-INSTALLER: Check if it crashed because of a missing module
-        for i = 1, 2 do -- Try max 2 times to prevent infinite loops
+        for i = 1, 2 do 
             local missing_module = print_output:match("ModuleNotFoundError: No module named '([^']+)'")
             if missing_module then
                 print("\n[Auto-Installer] Missing module detected: " .. missing_module)
-                print("[Auto-Installer] Attempting to download and install via pip...\n")
-                
-                -- Run pip install automatically
                 os.execute("pip install " .. missing_module)
-                
-                -- Retry the Python script after installation
                 handle = io.popen("python " .. py_file .. " 2>&1")
                 print_output = handle:read("*a")
                 handle:close()
-            else
-                break -- No missing modules, exit the retry loop
-            end
+            else break end
         end
 
-        -- SAFETY FIX 1: Keep the original Python code block
-        local output_blocks = { el }
+        local output_blocks = { el } -- Keep original source code
+        local generated_stuff = {}   -- Container for the graphs/prints
         
-        -- Print whatever Python spit out (Results OR the Crash Traceback)
         if print_output and print_output:match("%S") then
             print_output = print_output:gsub("%s+$", "") 
-            table.insert(output_blocks, pandoc.CodeBlock(print_output))
+            table.insert(generated_stuff, pandoc.CodeBlock(print_output))
         end
 
-        -- Check if the PDF graph was successfully created
         local check_pdf = io.open(pdf_file, "r")
         if check_pdf then
             check_pdf:close()
             local tex_injection = '\n\\begin{figure}[H]\n\\centering\n\\realincludegraphics[width=0.85\\textwidth]{' .. pdf_file .. '}\n\\end{figure}\n'
-            table.insert(output_blocks, pandoc.RawBlock('tex', tex_injection))
+            table.insert(generated_stuff, pandoc.RawBlock('tex', tex_injection))
         else
-            -- If it failed, inject a warning instead of a broken image to protect the LaTeX compiler
-            local error_msg = '\n\\textbf{\\color{red}Warning: Graph could not be generated. See Python traceback above.}\n'
-            table.insert(output_blocks, pandoc.RawBlock('tex', error_msg))
+            local error_msg = '\n\\textbf{\\color{red}Warning: Graph could not be generated. See traceback.}\n'
+            table.insert(generated_stuff, pandoc.RawBlock('tex', error_msg))
         end
+
+        -- Wrap the outputs in a special Div so we can delete it from the Text file later!
+        local output_div = pandoc.Div(generated_stuff, pandoc.Attr("", {"py-auto-generated"}))
+        table.insert(output_blocks, output_div)
 
         return output_blocks
     end
@@ -126,17 +111,20 @@ end
 
 -- 3. Output the perfectly clean Text file (SAFELY)
 function Pandoc(doc)
-    local clean_text = pandoc.write(doc, "markdown")
+    -- Create a copy of the AST specifically for the text file
+    -- We walk through and DELETE the Python graphs so they don't multiply!
+    local text_doc = pandoc.walk_block(pandoc.Div(doc.blocks), {
+        Div = function(div)
+            if div.classes:includes("py-auto-generated") then
+                return {} -- Vaporize the outputs from the .txt file!
+            end
+            return div
+        end
+    })
+
+    local clean_text = pandoc.write(pandoc.Pandoc(text_doc.content, doc.meta), "markdown")
+    local input_filename = PANDOC_STATE.input_files[1] or "cleaned_notes.txt" 
     
-    -- Dynamically grab the input file name
-    local input_filename = PANDOC_STATE.input_files[1] 
-    
-    -- Fallback just in case Pandoc is fed from standard input rather than a file
-    if not input_filename then 
-        input_filename = "cleaned_notes.txt" 
-    end
-    
-    -- SAFETY FIX 2: Only allow self-cleaning on .txt and .md files. Protect CSV and DOCX!
     local ext = input_filename:match("^.+(%..+)$")
     if ext ~= ".txt" and ext ~= ".md" then
         print("SUCCESS: PDF generated! (Skipped self-cleaning to protect " .. tostring(ext) .. " file).")
@@ -152,16 +140,11 @@ function Pandoc(doc)
         print("ERROR writing to " .. input_filename .. ": " .. tostring(err))
     end
     
+    -- Return the ORIGINAL doc (with the plots intact) to the PDF compiler!
     return doc
 end
 
--- 4. Explicitly return the filter table so Pandoc registers every function
 return {
-    Str = Str,
-    Math = Math,
-    Image = Image,
-    Figure = Figure,
-    Link = Link,
-    CodeBlock = CodeBlock,
-    Pandoc = Pandoc
+    Str = Str, Math = Math, Image = Image, Figure = Figure, Link = Link,
+    CodeBlock = CodeBlock, Pandoc = Pandoc
 }
