@@ -20,7 +20,6 @@ function Link(el) return el.content end
 local plot_counter = 0
 
 function CodeBlock(el)
-    -- Safely parse pasted HTML web blocks
     if el.classes:includes("htmlcode") then
         local doc = pandoc.read(el.text, "html")
         
@@ -54,14 +53,16 @@ function CodeBlock(el)
         return pandoc.walk_block(pandoc.Div(doc.blocks), math_cleaner).content
     end
 
-    -- Python execution and plot generation
     if el.classes:includes("python-run") then
         plot_counter = plot_counter + 1
         local py_file = "auto_plot_" .. plot_counter .. ".py"
         local pdf_file = "auto_plot_" .. plot_counter .. ".pdf"
 
+        -- ADDED: plt.show() protection
+        local safe_code = el.text:gsub("plt%.show%s*%(%s*%)", "")
+
         local file = io.open(py_file, "w")
-        file:write(el.text)
+        file:write(safe_code)
         file:write("\n\nimport matplotlib.pyplot as plt\n")
         file:write("plt.savefig('" .. pdf_file .. "', format='pdf', bbox_inches='tight')\n")
         file:close()
@@ -81,8 +82,8 @@ function CodeBlock(el)
             else break end
         end
 
-        local output_blocks = { el } -- Keep original source code
-        local generated_stuff = {}   -- Container for the graphs/prints
+        local output_blocks = { el } 
+        local generated_stuff = {}   
         
         if print_output and print_output:match("%S") then
             print_output = print_output:gsub("%s+$", "") 
@@ -99,7 +100,6 @@ function CodeBlock(el)
             table.insert(generated_stuff, pandoc.RawBlock('tex', error_msg))
         end
 
-        -- Wrap the outputs in a special Div so we can delete it from the Text file later!
         local output_div = pandoc.Div(generated_stuff, pandoc.Attr("", {"py-auto-generated"}))
         table.insert(output_blocks, output_div)
 
@@ -109,20 +109,33 @@ function CodeBlock(el)
     return el
 end
 
+-- ADDED: The Rescue Mission (Fishes Python out of the LaTeX garbage black hole)
+function RawBlock(el)
+    if (el.format == "tex" or el.format == "latex") and el.text:match("python%-run") then
+        local safe_text = el.text:gsub("\\begin{document}", ""):gsub("\\end{document}", "")
+        local rescued_doc = pandoc.read(safe_text, "markdown")
+        return pandoc.walk_block(pandoc.Div(rescued_doc.blocks), { CodeBlock = CodeBlock }).content
+    end
+    return el
+end
+
 -- 3. Output the perfectly clean Text file (SAFELY)
 function Pandoc(doc)
-    -- Create a copy of the AST specifically for the text file
-    -- We walk through and DELETE the Python graphs so they don't multiply!
     local text_doc = pandoc.walk_block(pandoc.Div(doc.blocks), {
         Div = function(div)
             if div.classes:includes("py-auto-generated") then
-                return {} -- Vaporize the outputs from the .txt file!
+                return {} 
             end
             return div
         end
     })
 
     local clean_text = pandoc.write(pandoc.Pandoc(text_doc.content, doc.meta), "markdown")
+    
+    -- ADDED: Force Pandoc to remove spaces from your backticks so the next compile doesn't crash
+    clean_text = clean_text:gsub("```%s+python%-run", "```python-run")
+    clean_text = clean_text:gsub("```%s+{%s*%.python%-run%s*}", "```python-run")
+
     local input_filename = PANDOC_STATE.input_files[1] or "cleaned_notes.txt" 
     
     local ext = input_filename:match("^.+(%..+)$")
@@ -140,11 +153,10 @@ function Pandoc(doc)
         print("ERROR writing to " .. input_filename .. ": " .. tostring(err))
     end
     
-    -- Return the ORIGINAL doc (with the plots intact) to the PDF compiler!
     return doc
 end
 
 return {
     Str = Str, Math = Math, Image = Image, Figure = Figure, Link = Link,
-    CodeBlock = CodeBlock, Pandoc = Pandoc
+    CodeBlock = CodeBlock, RawBlock = RawBlock, Pandoc = Pandoc
 }
