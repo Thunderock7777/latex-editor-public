@@ -1,3 +1,50 @@
+-- ==========================================
+-- PASS 1: FRESH NOTEBOOKLM TEXT PRE-PROCESSOR
+-- ==========================================
+local function PreProcessor(doc)
+    local input_filename = PANDOC_STATE.input_files[1] 
+    if not input_filename then return nil end
+    
+    local ext = input_filename:match("^.+(%..+)$")
+    if ext ~= ".txt" and ext ~= ".md" then return nil end
+    
+    local file = io.open(input_filename, "r")
+    if not file then return nil end
+    local raw_text = file:read("*a")
+    file:close()
+    
+    local changed = false
+    
+    -- Detect NotebookLM's specific math formatting
+    if raw_text:match("\\%(") or raw_text:match("\\%[") or raw_text:match("\\%$") then
+        -- 1. Fix NotebookLM's web-math brackets
+        raw_text = raw_text:gsub("\\%(", "$")
+        raw_text = raw_text:gsub("\\%)", "$")
+        raw_text = raw_text:gsub("\\%[", "$$")
+        raw_text = raw_text:gsub("\\%]", "$$")
+        
+        -- 2. Fix NotebookLM's escaped dollar signs (e.g., \$2a\$)
+        raw_text = raw_text:gsub("\\%$", "$")
+        
+        changed = true
+    end
+    
+    if changed then
+        local out_file = io.open(input_filename, "w")
+        out_file:write(raw_text)
+        out_file:close()
+        
+        print("\n[AI Pre-Processor] Fresh NotebookLM math formatted! Rebuilding AST...\n")
+        return pandoc.read(raw_text, "markdown")
+    end
+    
+    return nil
+end
+
+-- ==========================================
+-- PASS 2: THE MAIN PIPELINE
+-- ==========================================
+
 -- 1. Vaporize stray URLs and group tags
 function Str(el)
     local text = el.text or ""
@@ -58,7 +105,6 @@ function CodeBlock(el)
         local py_file = "auto_plot_" .. plot_counter .. ".py"
         local pdf_file = "auto_plot_" .. plot_counter .. ".pdf"
 
-        -- ADDED: plt.show() protection
         local safe_code = el.text:gsub("plt%.show%s*%(%s*%)", "")
 
         local file = io.open(py_file, "w")
@@ -109,7 +155,6 @@ function CodeBlock(el)
     return el
 end
 
--- ADDED: The Rescue Mission (Fishes Python out of the LaTeX garbage black hole)
 function RawBlock(el)
     if (el.format == "tex" or el.format == "latex") and el.text:match("python%-run") then
         local safe_text = el.text:gsub("\\begin{document}", ""):gsub("\\end{document}", "")
@@ -132,9 +177,13 @@ function Pandoc(doc)
 
     local clean_text = pandoc.write(pandoc.Pandoc(text_doc.content, doc.meta), "markdown")
     
-    -- ADDED: Force Pandoc to remove spaces from your backticks so the next compile doesn't crash
+    -- THE PANDOC SHIELD: Forbids Pandoc from vandalizing your fresh NotebookLM math
     clean_text = clean_text:gsub("```%s+python%-run", "```python-run")
     clean_text = clean_text:gsub("```%s+{%s*%.python%-run%s*}", "```python-run")
+    clean_text = clean_text:gsub("`([^`]+)`{=tex}", "%1") -- Prevents {=tex} corruption
+    clean_text = clean_text:gsub("\\%$", "$")             -- Stops Pandoc from escaping dollars
+    clean_text = clean_text:gsub("\\%^", "^")             -- Stops Pandoc from escaping powers
+    clean_text = clean_text:gsub("\\%|", "|")             -- Stops Pandoc from escaping bra-kets
 
     local input_filename = PANDOC_STATE.input_files[1] or "cleaned_notes.txt" 
     
@@ -148,7 +197,7 @@ function Pandoc(doc)
     if file then
         file:write(clean_text)
         file:close()
-        print("SUCCESS: " .. input_filename .. " was cleaned and overwritten!")
+        print("SUCCESS: " .. input_filename .. " was cleaned and overwritten safely!")
     else
         print("ERROR writing to " .. input_filename .. ": " .. tostring(err))
     end
@@ -157,6 +206,9 @@ function Pandoc(doc)
 end
 
 return {
-    Str = Str, Math = Math, Image = Image, Figure = Figure, Link = Link,
-    CodeBlock = CodeBlock, RawBlock = RawBlock, Pandoc = Pandoc
+    { Pandoc = PreProcessor },
+    {
+        Str = Str, Math = Math, Image = Image, Figure = Figure, Link = Link,
+        CodeBlock = CodeBlock, RawBlock = RawBlock, Pandoc = Pandoc
+    }
 }
