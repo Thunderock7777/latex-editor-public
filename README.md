@@ -26,7 +26,8 @@ javascript:(function(){var sel=window.getSelection();if(sel.rangeCount>0){var di
 
 ```
 
-**How to use it:** Highlight any AI response, Wikipedia equation, or web text. Instead of pressing `Ctrl+C`, click the **Copy HTML** bookmarklet.
+**How to use it:** Highlight any webpage, drag and select, Wikipedia equation, or web text. Instead of pressing `Ctrl+C`, click the **Copy HTML** bookmarklet.
+for AI responses you can directly copy paste using there provided option.For drag and select use the provided bookmark only
 
 ---
 
