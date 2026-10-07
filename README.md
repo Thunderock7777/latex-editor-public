@@ -120,16 +120,15 @@ plt.plot(x, y)
 
 ### 4. Inserting Local Images
 
-Because the Lua engine aggressively scrubs standard Markdown images (`![alt](url)`) to prevent compiler crashes from pasted web clutter, you must insert local screenshots or diagrams using the raw LaTeX backdoor.
+Because the Lua engine aggressively scrubs standard Markdown images (`![alt](url)`) to prevent compiler crashes from pasted web clutter, you must insert local screenshots or diagrams using the raw LaTeX backdoor.You can paste latex codes without any error problem without any protection.
 
-```latex
+
 \begin{figure}[H]
 \centering
 \realincludegraphics[width=0.85\textwidth]{your_image_name.png}
 \caption{Your image caption goes here}
 \end{figure}
 
-```
 
 ---
 
