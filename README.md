@@ -141,3 +141,11 @@ Created by Abhik Biswas with the help of Gemini. Feel free to fork, modify, and 
 <FollowUp label="Review README structure" query="Does this updated README perfectly capture the primary AI/math copy-paste workflow you envisioned, or is there any specific wording you'd like adjusted?"/>
 
 ```
+
+install python 3.12.0
+check : py -m pip --version
+commands:
+py -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+py -m pip install marker-pdf
+
+
