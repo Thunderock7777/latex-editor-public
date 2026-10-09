@@ -1,11 +1,14 @@
 -- ==========================================
--- PASS 1: FRESH NOTEBOOKLM TEXT PRE-PROCESSOR
+-- PASS 1: NOTEBOOKLM MATH PRE-PROCESSOR
 -- ==========================================
 local function PreProcessor(doc)
     local input_filename = PANDOC_STATE.input_files[1] 
     if not input_filename then return nil end
     
     local ext = input_filename:match("^.+(%..+)$")
+    if not ext then return nil end
+    ext = ext:lower() 
+    
     if ext ~= ".txt" and ext ~= ".md" then return nil end
     
     local file = io.open(input_filename, "r")
@@ -15,16 +18,29 @@ local function PreProcessor(doc)
     
     local changed = false
     
-    -- Detect NotebookLM's specific math formatting
-    if raw_text:match("\\%(") or raw_text:match("\\%[") or raw_text:match("\\%$") then
+    -- Detect NotebookLM's aggressive escaping or math formatting
+    if raw_text:match("\\%(") or raw_text:match("\\%[") or raw_text:match("\\%$") or raw_text:match("{=tex}") then
+        
+        -- CREATE BACKUP 
+        local bak_name = input_filename .. ".bak"
+        local bak_file = io.open(bak_name, "w")
+        if bak_file then
+            bak_file:write(raw_text)
+            bak_file:close()
+        end
+
         -- 1. Fix NotebookLM's web-math brackets
         raw_text = raw_text:gsub("\\%(", "$")
         raw_text = raw_text:gsub("\\%)", "$")
         raw_text = raw_text:gsub("\\%[", "$$")
         raw_text = raw_text:gsub("\\%]", "$$")
         
-        -- 2. Fix NotebookLM's escaped dollar signs (e.g., \$2a\$)
-        raw_text = raw_text:gsub("\\%$", "$")
+        -- 2. THE NOTEBOOKLM OVERRIDE: NotebookLM violently escapes its own math.
+        -- We must forcefully un-escape these so XeLaTeX can read them as quantum mechanics.
+        raw_text = raw_text:gsub("\\%$", "$")             -- Un-escape dollars
+        raw_text = raw_text:gsub("\\%^", "^")             -- Un-escape exponents
+        raw_text = raw_text:gsub("\\%|", "|")             -- Un-escape bra-kets
+        raw_text = raw_text:gsub("`([^`]+)`{=tex}", "%1") -- Vaporize NotebookLM's {=tex} tags
         
         changed = true
     end
@@ -34,7 +50,7 @@ local function PreProcessor(doc)
         out_file:write(raw_text)
         out_file:close()
         
-        print("\n[AI Pre-Processor] Fresh NotebookLM math formatted! Rebuilding AST...\n")
+        print("\n[AI Pre-Processor] NotebookLM aggressive escaping neutralized! Rebuilding AST...\n")
         return pandoc.read(raw_text, "markdown")
     end
     
@@ -45,10 +61,9 @@ end
 -- PASS 2: THE MAIN PIPELINE
 -- ==========================================
 
--- 1. Vaporize stray URLs and group tags
 function Str(el)
     local text = el.text or ""
-    if text:match("\\begingroup") or text:match("\\endgroup") or text:match("^http") then return {} end
+    if text:match("\\begingroup") or text:match("\\endgroup") or text:match("^https?://") then return {} end
     return el
 end
 
@@ -60,10 +75,8 @@ end
 
 function Image(el) return {} end
 function Figure(el) return {} end
-
 function Link(el) return el.content end
 
--- 2. Handle both HTML extraction blocks and Python execution blocks
 local plot_counter = 0
 
 function CodeBlock(el)
@@ -107,10 +120,13 @@ function CodeBlock(el)
 
         local safe_code = el.text:gsub("plt%.show%s*%(%s*%)", "")
 
+        os.remove(pdf_file)
+
         local file = io.open(py_file, "w")
         file:write(safe_code)
         file:write("\n\nimport matplotlib.pyplot as plt\n")
-        file:write("plt.savefig('" .. pdf_file .. "', format='pdf', bbox_inches='tight')\n")
+        file:write("if len(plt.get_fignums()) > 0:\n")
+        file:write("    plt.savefig('" .. pdf_file .. "', format='pdf', bbox_inches='tight')\n")
         file:close()
 
         local handle = io.popen("python " .. py_file .. " 2>&1")
@@ -118,14 +134,23 @@ function CodeBlock(el)
         handle:close()
 
         for i = 1, 2 do 
-            local missing_module = print_output:match("ModuleNotFoundError: No module named '([^']+)'")
+            local missing_module = print_output:match("ModuleNotFoundError: No module named '([%w_]+)'")
             if missing_module then
-                print("\n[Auto-Installer] Missing module detected: " .. missing_module)
-                os.execute("pip install " .. missing_module)
-                handle = io.popen("python " .. py_file .. " 2>&1")
-                print_output = handle:read("*a")
-                handle:close()
-            else break end
+                local allowed_modules = {matplotlib=true, numpy=true, scipy=true, sympy=true, pandas=true, math=true}
+                
+                if allowed_modules[missing_module] then
+                    print("\n[Auto-Installer] Installing allowed module: " .. missing_module)
+                    os.execute("python -m pip install " .. missing_module)
+                    handle = io.popen("python " .. py_file .. " 2>&1")
+                    print_output = handle:read("*a")
+                    handle:close()
+                else
+                    print("\n[Warning] Module '" .. missing_module .. "' not in allow-list. Skipping install.")
+                    break
+                end
+            else 
+                break 
+            end
         end
 
         local output_blocks = { el } 
@@ -139,7 +164,7 @@ function CodeBlock(el)
         local check_pdf = io.open(pdf_file, "r")
         if check_pdf then
             check_pdf:close()
-            local tex_injection = '\n\\begin{figure}[H]\n\\centering\n\\realincludegraphics[width=0.85\\textwidth]{' .. pdf_file .. '}\n\\end{figure}\n'
+            local tex_injection = '\n\\begin{figure}[H]\n\\centering\n\\realincludegraphics[width=0.85\\textwidth]{' .. pdf_file .. '}\n\\stepcounter{figure}\n\\end{figure}\n'
             table.insert(generated_stuff, pandoc.RawBlock('tex', tex_injection))
         else
             local error_msg = '\n\\textbf{\\color{red}Warning: Graph could not be generated. See traceback.}\n'
@@ -164,44 +189,7 @@ function RawBlock(el)
     return el
 end
 
--- 3. Output the perfectly clean Text file (SAFELY)
 function Pandoc(doc)
-    local text_doc = pandoc.walk_block(pandoc.Div(doc.blocks), {
-        Div = function(div)
-            if div.classes:includes("py-auto-generated") then
-                return {} 
-            end
-            return div
-        end
-    })
-
-    local clean_text = pandoc.write(pandoc.Pandoc(text_doc.content, doc.meta), "markdown")
-    
-    -- THE PANDOC SHIELD: Forbids Pandoc from vandalizing your fresh NotebookLM math
-    clean_text = clean_text:gsub("```%s+python%-run", "```python-run")
-    clean_text = clean_text:gsub("```%s+{%s*%.python%-run%s*}", "```python-run")
-    clean_text = clean_text:gsub("`([^`]+)`{=tex}", "%1") -- Prevents {=tex} corruption
-    clean_text = clean_text:gsub("\\%$", "$")             -- Stops Pandoc from escaping dollars
-    clean_text = clean_text:gsub("\\%^", "^")             -- Stops Pandoc from escaping powers
-    clean_text = clean_text:gsub("\\%|", "|")             -- Stops Pandoc from escaping bra-kets
-
-    local input_filename = PANDOC_STATE.input_files[1] or "cleaned_notes.txt" 
-    
-    local ext = input_filename:match("^.+(%..+)$")
-    if ext ~= ".txt" and ext ~= ".md" then
-        print("SUCCESS: PDF generated! (Skipped self-cleaning to protect " .. tostring(ext) .. " file).")
-        return doc
-    end
-    
-    local file, err = io.open(input_filename, "w")
-    if file then
-        file:write(clean_text)
-        file:close()
-        print("SUCCESS: " .. input_filename .. " was cleaned and overwritten safely!")
-    else
-        print("ERROR writing to " .. input_filename .. ": " .. tostring(err))
-    end
-    
     return doc
 end
 
